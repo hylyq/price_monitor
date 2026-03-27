@@ -50,15 +50,21 @@ async def main() -> None:
     if inst_ids:
         logger.info(f"恢复订阅品种: {inst_ids}")
 
+    initialized = False
+
     @wechat_client.message_handler
     async def handle_message(data: dict):
         text = data.get("text", "")
+        logger.info(f"收到消息: {text}")
         await cmd_handler.handle_text(text, wechat_client)
 
     @wechat_client.status_handler
     async def handle_status(data: dict):
+        nonlocal initialized
         status = data.get("status")
-        if status == "online":
+
+        if status == "online" and not initialized:
+            initialized = True
             logger.info("微信服务已上线")
             await wechat_client.notify("🤖 OKX价格监控服务已启动\n发送 /pm help 查看可用命令")
 
@@ -68,6 +74,7 @@ async def main() -> None:
             asyncio.create_task(okx_client.connect())
         elif status == "offline":
             logger.warning("微信服务离线")
+            initialized = False
         elif data.get("need_login"):
             logger.error("微信服务需要重新登录")
 
