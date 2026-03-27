@@ -46,56 +46,58 @@ uv run python main.py
 
 ## 微信命令
 
+所有命令以 `/pm` 开头，避免与 WeChatService 的命令冲突。
+
 ### 查询命令
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/help` | 查看帮助 | `/help` |
-| `/price <品种>` | 查询当前价格 | `/price BTC-USDT` |
-| `/price` | 查询所有已订阅品种价格 | `/price` |
-| `/list [品种]` | 查看监控规则 | `/list` |
-| `/list BTC-USDT` | 查看指定品种的规则 | `/list BTC-USDT` |
+| `/pm help` | 查看帮助 | `/pm help` |
+| `/pm price <品种>` | 查询当前价格 | `/pm price BTC-USDT` |
+| `/pm price` | 查询所有已订阅品种价格 | `/pm price` |
+| `/pm list [品种]` | 查看监控规则 | `/pm list` |
+| `/pm list BTC-USDT` | 查看指定品种的规则 | `/pm list BTC-USDT` |
 
 ### 添加监控
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/add <品种> > <价格>` | 价格突破告警 | `/add BTC-USDT > 100000` |
-| `/add <品种> < <价格>` | 价格跌破告警 | `/add ETH-USDT < 3000` |
-| `/add <品种> up <涨幅>% <分钟>` | 涨幅告警 | `/add BTC-USDT up 5 60` |
-| `/add <品种> down <跌幅>% <分钟>` | 跌幅告警 | `/add BTC-USDT down 3 30` |
+| `/pm add <品种> > <价格>` | 价格突破告警 | `/pm add BTC-USDT > 100000` |
+| `/pm add <品种> < <价格>` | 价格跌破告警 | `/pm add ETH-USDT < 3000` |
+| `/pm add <品种> up <涨幅>% <分钟>` | 涨幅告警 | `/pm add BTC-USDT up 5 60` |
+| `/pm add <品种> down <跌幅>% <分钟>` | 跌幅告警 | `/pm add BTC-USDT down 3 30` |
 
 ### 删除监控
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `/del <规则ID>` | 删除指定规则 | `/del abc12345` |
-| `/clear [品种]` | 清除所有规则 | `/clear` |
-| `/clear BTC-USDT` | 清除指定品种规则 | `/clear BTC-USDT` |
+| `/pm del <规则ID>` | 删除指定规则 | `/pm del abc12345` |
+| `/pm clear [品种]` | 清除所有规则 | `/pm clear` |
+| `/pm clear BTC-USDT` | 清除指定品种规则 | `/pm clear BTC-USDT` |
 
 ## 使用示例
 
 ```
 # 查询BTC价格
-/price BTC-USDT
+/pm price BTC-USDT
 
 # 添加BTC突破10万美元告警
-/add BTC-USDT > 100000
+/pm add BTC-USDT > 100000
 
 # 添加ETH跌破3000美元告警
-/add ETH-USDT < 3000
+/pm add ETH-USDT < 3000
 
 # 添加BTC 60分钟涨幅超过5%告警
-/add BTC-USDT up 5 60
+/pm add BTC-USDT up 5 60
 
 # 添加BTC 30分钟跌幅超过3%告警
-/add BTC-USDT down 3 30
+/pm add BTC-USDT down 3 30
 
 # 查看所有监控规则
-/list
+/pm list
 
 # 删除规则
-/del abc12345
+/pm del abc12345
 ```
 
 ## 告警消息示例

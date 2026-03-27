@@ -60,7 +60,7 @@ async def main() -> None:
         status = data.get("status")
         if status == "online":
             logger.info("微信服务已上线")
-            await wechat_client.notify("🤖 OKX价格监控服务已启动\n发送 /help 查看可用命令")
+            await wechat_client.notify("🤖 OKX价格监控服务已启动\n发送 /pm help 查看可用命令")
 
             if inst_ids:
                 await okx_client.subscribe(inst_ids)
