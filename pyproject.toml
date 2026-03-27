@@ -1,0 +1,22 @@
+[project]
+name = "price-monitor"
+version = "0.1.0"
+description = "OKX数字货币价格监控程序，支持微信通知"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "larky",
+    "websockets>=12.0",
+    "redis>=5.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.uv.sources]
+larky = { path = "../larky" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/price_monitor"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
