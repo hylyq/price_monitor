@@ -16,6 +16,22 @@ REDIS_KEY_RULES = "price_monitor:rules"
 REDIS_KEY_PRICES = "price_monitor:prices"
 
 
+def format_price(price: float) -> str:
+    if price >= 1000:
+        return f"{price:,.2f}"
+    elif price >= 1:
+        formatted = f"{price:.4f}".rstrip("0").rstrip(".")
+        return formatted
+    elif price >= 0.01:
+        formatted = f"{price:.4f}".rstrip("0").rstrip(".")
+        return formatted
+    else:
+        str_price = f"{price:.12f}".rstrip("0")
+        if str_price.endswith("."):
+            str_price = str_price[:-1]
+        return str_price
+
+
 class AlertType(Enum):
     PRICE_ABOVE = "price_above"
     PRICE_BELOW = "price_below"
@@ -48,9 +64,9 @@ class AlertRule:
 
     def get_description(self) -> str:
         if self.alert_type == AlertType.PRICE_ABOVE:
-            return f"📈 {self.inst_id} 价格 >= ${self.threshold:,.2f}"
+            return f"📈 {self.inst_id} 价格 >= ${format_price(self.threshold)}"
         elif self.alert_type == AlertType.PRICE_BELOW:
-            return f"📉 {self.inst_id} 价格 <= ${self.threshold:,.2f}"
+            return f"📉 {self.inst_id} 价格 <= ${format_price(self.threshold)}"
         elif self.alert_type == AlertType.CHANGE_UP:
             return f"⬆️ {self.inst_id} {self.interval_minutes}分钟涨幅 >= {self.threshold}%"
         elif self.alert_type == AlertType.CHANGE_DOWN:

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Awaitable
 
 from .okx_client import TickerData
-from .storage import AlertRule, AlertType, RuleStorage
+from .storage import AlertRule, AlertType, RuleStorage, format_price
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +109,8 @@ class PriceMonitor:
         return (
             f"{emoji} 【价格告警】\n"
             f"品种: {ticker.inst_id}\n"
-            f"当前价格: ${ticker.last:,.2f}\n"
-            f"已{direction}目标价位: ${rule.threshold:,.2f}\n"
+            f"当前价格: ${format_price(ticker.last)}\n"
+            f"已{direction}目标价位: ${format_price(rule.threshold)}\n"
             f"时间: {ticker.ts:%Y-%m-%d %H:%M:%S}"
         )
 
@@ -122,9 +122,9 @@ class PriceMonitor:
         return (
             f"{emoji} 【波动告警】\n"
             f"品种: {ticker.inst_id}\n"
-            f"当前价格: ${ticker.last:,.2f}\n"
+            f"当前价格: ${format_price(ticker.last)}\n"
             f"{rule.interval_minutes}分钟{direction}: {abs(change_pct):.2f}%\n"
-            f"起始价格: ${start_price:,.2f}\n"
+            f"起始价格: ${format_price(start_price)}\n"
             f"时间: {ticker.ts:%Y-%m-%d %H:%M:%S}"
         )
 

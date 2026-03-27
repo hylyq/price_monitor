@@ -2,7 +2,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from .storage import AlertRule, AlertType
+from .storage import AlertRule, AlertType, format_price
 from .monitor import PriceMonitor
 
 if TYPE_CHECKING:
@@ -182,7 +182,7 @@ class CommandHandler:
                 return "📭 暂无价格数据，请稍后再试"
             lines = ["📊 当前价格:"]
             for inst_id, price in sorted(prices.items()):
-                lines.append(f"  {inst_id}: ${price:,.2f}")
+                lines.append(f"  {inst_id}: ${format_price(price)}")
             return "\n".join(lines)
 
         inst_id = args[0].upper()
@@ -194,9 +194,9 @@ class CommandHandler:
 
         return (
             f"📊 {inst_id}\n"
-            f"当前价格: ${ticker.last:,.2f}\n"
-            f"24h最高: ${ticker.high_24h:,.2f}\n"
-            f"24h最低: ${ticker.low_24h:,.2f}\n"
+            f"当前价格: ${format_price(ticker.last)}\n"
+            f"24h最高: ${format_price(ticker.high_24h)}\n"
+            f"24h最低: ${format_price(ticker.low_24h)}\n"
             f"24h成交量: {ticker.vol_24h:,.0f}"
         )
 
