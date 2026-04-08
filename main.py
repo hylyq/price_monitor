@@ -79,8 +79,10 @@ async def main() -> None:
             logger.error("微信服务需要重新登录")
 
     try:
+        await monitor.start()
         await wechat_client.run()
     finally:
+        await monitor.stop()
         await okx_client.close()
         await storage.close()
 

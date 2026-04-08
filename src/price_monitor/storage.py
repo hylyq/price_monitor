@@ -86,39 +86,55 @@ class RuleStorage:
             self.redis = redis.from_url(redis_url)
         else:
             self.redis = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
+        self._rules_cache: list[AlertRule] | None = None
+        self._rules_cache_dirty = True
+
+    def _invalidate_rules_cache(self) -> None:
+        self._rules_cache = None
+        self._rules_cache_dirty = True
+
+    async def _get_rules_cache(self) -> list[AlertRule]:
+        if self._rules_cache is None or self._rules_cache_dirty:
+            items = await self.redis.hgetall(REDIS_KEY_RULES)
+            self._rules_cache = [
+                AlertRule.from_dict(json.loads(data)) for data in items.values()
+            ]
+            self._rules_cache_dirty = False
+        return self._rules_cache
 
     async def add_rule(self, rule: AlertRule) -> None:
         await self.redis.hset(REDIS_KEY_RULES, rule.id, json.dumps(rule.to_dict()))
+        self._invalidate_rules_cache()
         logger.info(f"添加规则: {rule.id} - {rule.get_description()}")
 
     async def remove_rule(self, rule_id: str) -> bool:
         result = await self.redis.hdel(REDIS_KEY_RULES, rule_id)
         if result:
+            self._invalidate_rules_cache()
             logger.info(f"删除规则: {rule_id}")
         return result > 0
 
     async def get_rule(self, rule_id: str) -> AlertRule | None:
-        data = await self.redis.hget(REDIS_KEY_RULES, rule_id)
-        if data:
-            return AlertRule.from_dict(json.loads(data))
+        rules = await self._get_rules_cache()
+        for r in rules:
+            if r.id == rule_id:
+                return r
         return None
 
     async def get_all_rules(self) -> list[AlertRule]:
-        items = await self.redis.hgetall(REDIS_KEY_RULES)
-        rules = []
-        for data in items.values():
-            rules.append(AlertRule.from_dict(json.loads(data)))
-        return rules
+        return list(await self._get_rules_cache())
 
     async def get_rules_by_inst(self, inst_id: str) -> list[AlertRule]:
-        rules = await self.get_all_rules()
+        rules = await self._get_rules_cache()
         return [r for r in rules if r.inst_id == inst_id]
 
     async def update_rule(self, rule: AlertRule) -> None:
         await self.redis.hset(REDIS_KEY_RULES, rule.id, json.dumps(rule.to_dict()))
+        self._invalidate_rules_cache()
 
     async def clear_all_rules(self) -> None:
         await self.redis.delete(REDIS_KEY_RULES)
+        self._invalidate_rules_cache()
         logger.info("清除所有规则")
 
     async def save_price(self, inst_id: str, price: float, ts: datetime) -> None:
@@ -126,6 +142,17 @@ class RuleStorage:
         data = {"price": price, "ts": ts.isoformat()}
         await self.redis.rpush(key, json.dumps(data))
         await self.redis.ltrim(key, -1000, -1)
+
+    async def save_prices_batch(self, updates: list[tuple[str, float, datetime]]) -> None:
+        if not updates:
+            return
+        async with self.redis.pipeline() as pipe:
+            for inst_id, price, ts in updates:
+                key = f"{REDIS_KEY_PRICES}:{inst_id}"
+                data = {"price": price, "ts": ts.isoformat()}
+                pipe.rpush(key, json.dumps(data))
+                pipe.ltrim(key, -1000, -1)
+            await pipe.execute()
 
     async def get_price_history(
         self, inst_id: str, since_minutes: int

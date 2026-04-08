@@ -138,6 +138,8 @@ class CommandHandler:
 
         await self.okx_client.subscribe([inst_id])
 
+        self.monitor.invalidate_rules_cache()
+
         return f"✅ 已添加监控规则\nID: {rule_id}\n{rule.get_description()}"
 
     async def _cmd_del(self, args: list) -> str:
@@ -155,6 +157,8 @@ class CommandHandler:
         rules = await self.storage.get_rules_by_inst(rule.inst_id)
         if not rules:
             await self.okx_client.unsubscribe([rule.inst_id])
+
+        self.monitor.invalidate_rules_cache()
 
         return f"✅ 已删除规则: {rule_id}"
 
@@ -207,10 +211,12 @@ class CommandHandler:
             for rule in rules:
                 await self.storage.remove_rule(rule.id)
             await self.okx_client.unsubscribe([inst_id])
+            self.monitor.invalidate_rules_cache()
             return f"✅ 已清除 {inst_id} 的所有规则 ({len(rules)}条)"
         else:
             rules = await self.storage.get_all_rules()
             await self.storage.clear_all_rules()
             for rule in rules:
                 await self.okx_client.unsubscribe([rule.inst_id])
+            self.monitor.invalidate_rules_cache()
             return f"✅ 已清除所有规则 ({len(rules)}条)"

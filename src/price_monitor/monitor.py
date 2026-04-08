@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 AlertCallback = Callable[[AlertRule, TickerData, str], Awaitable[None]]
 
+TICKER_THROTTLE_SECONDS = 1.0
+PRICE_SAVE_INTERVAL_SECONDS = 5.0
+HISTORY_CLEANUP_INTERVAL_SECONDS = 60.0
+
 
 class PriceMonitor:
     def __init__(
@@ -25,21 +29,91 @@ class PriceMonitor:
         self.cooldown_minutes = cooldown_minutes
         self._price_history: dict[str, list[tuple[datetime, float]]] = defaultdict(list)
         self._last_alert: dict[str, datetime] = {}
+        self._last_ticker: dict[str, datetime] = {}
+        self._pending_prices: dict[str, tuple[float, datetime]] = {}
+        self._rules_cache: dict[str, list[AlertRule]] = {}
+        self._rules_cache_time: datetime = datetime.min
+        self._rules_cache_ttl = timedelta(seconds=10)
+        self._last_history_cleanup: datetime = datetime.min
+        self._save_task: asyncio.Task | None = None
+
+    async def start(self) -> None:
+        self._save_task = asyncio.create_task(self._price_save_loop())
+
+    async def stop(self) -> None:
+        if self._save_task:
+            self._save_task.cancel()
+            try:
+                await self._save_task
+            except asyncio.CancelledError:
+                pass
+        await self._flush_prices()
 
     async def on_ticker(self, ticker: TickerData) -> None:
-        self._price_history[ticker.inst_id].append((ticker.ts, ticker.last))
-        cutoff = datetime.now() - timedelta(hours=1)
-        self._price_history[ticker.inst_id] = [
-            (ts, p) for ts, p in self._price_history[ticker.inst_id] if ts > cutoff
-        ]
+        now = datetime.now()
+        inst_id = ticker.inst_id
 
-        await self.storage.save_price(ticker.inst_id, ticker.last, ticker.ts)
+        self._pending_prices[inst_id] = (ticker.last, ticker.ts)
 
-        rules = await self.storage.get_rules_by_inst(ticker.inst_id)
+        last = self._last_ticker.get(inst_id)
+        if last and (now - last).total_seconds() < TICKER_THROTTLE_SECONDS:
+            return
+        self._last_ticker[inst_id] = now
+
+        self._price_history[inst_id].append((ticker.ts, ticker.last))
+
+        if (now - self._last_history_cleanup).total_seconds() >= HISTORY_CLEANUP_INTERVAL_SECONDS:
+            self._cleanup_history(now)
+            self._last_history_cleanup = now
+
+        rules = await self._get_rules_cached(inst_id)
         for rule in rules:
             if not rule.enabled:
                 continue
             await self._check_rule(rule, ticker)
+
+    def _cleanup_history(self, now: datetime) -> None:
+        cutoff = now - timedelta(hours=1)
+        for inst_id in list(self._price_history.keys()):
+            history = self._price_history[inst_id]
+            if not history:
+                continue
+            first_valid = 0
+            for i, (ts, _) in enumerate(history):
+                if ts > cutoff:
+                    first_valid = i
+                    break
+            else:
+                first_valid = len(history)
+            if first_valid > 0:
+                self._price_history[inst_id] = history[first_valid:]
+
+    async def _get_rules_cached(self, inst_id: str) -> list[AlertRule]:
+        now = datetime.now()
+        if now - self._rules_cache_time > self._rules_cache_ttl:
+            all_rules = await self.storage.get_all_rules()
+            self._rules_cache = defaultdict(list)
+            for r in all_rules:
+                self._rules_cache[r.inst_id].append(r)
+            self._rules_cache_time = now
+        return self._rules_cache.get(inst_id, [])
+
+    def invalidate_rules_cache(self) -> None:
+        self._rules_cache.clear()
+        self._rules_cache_time = datetime.min
+
+    async def _price_save_loop(self) -> None:
+        while True:
+            await asyncio.sleep(PRICE_SAVE_INTERVAL_SECONDS)
+            await self._flush_prices()
+
+    async def _flush_prices(self) -> None:
+        if not self._pending_prices:
+            return
+        pending = self._pending_prices.copy()
+        self._pending_prices.clear()
+        for inst_id, (price, ts) in pending.items():
+            await self.storage.save_price(inst_id, price, ts)
 
     async def _check_rule(self, rule: AlertRule, ticker: TickerData) -> None:
         if rule.alert_type in (AlertType.PRICE_ABOVE, AlertType.PRICE_BELOW):
