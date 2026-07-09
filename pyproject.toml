@@ -9,6 +9,7 @@ dependencies = [
     "websockets>=12.0",
     "redis>=5.0.0",
     "python-dotenv>=1.0.0",
+    "anthropic>=0.116.0",
 ]
 
 [tool.uv.sources]
@@ -20,3 +21,9 @@ packages = ["src/price_monitor"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]

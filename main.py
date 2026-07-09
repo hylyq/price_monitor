@@ -38,11 +38,27 @@ async def main() -> None:
     monitor = PriceMonitor(storage=storage, alert_callback=alert_callback)
     okx_client.on_ticker = lambda ticker: asyncio.create_task(monitor.on_ticker(ticker))
 
+    # ── LLM Agent (optional — enabled when LLM_API_KEY is set) ──────
+    from price_monitor.agent import Agent
+
+    llm_api_key = os.getenv("LLM_API_KEY")
+    agent = None
+    if llm_api_key:
+        agent = Agent(
+            storage=storage,
+            monitor=monitor,
+            okx_client=okx_client,
+        )
+        logger.info("LLM Agent 已启用 (model=%s)", agent.model)
+    else:
+        logger.warning("未设置 LLM_API_KEY，/ask 命令不可用")
+
     cmd_handler = CommandHandler(
         storage=storage,
         monitor=monitor,
         okx_client=okx_client,
         wechat_client=wechat_client,
+        agent=agent,
     )
 
     rules = await storage.get_all_rules()

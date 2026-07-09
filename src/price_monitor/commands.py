@@ -8,6 +8,8 @@ from .monitor import PriceMonitor
 if TYPE_CHECKING:
     from larky import WeChatClient
 
+    from .agent import Agent
+
 logger = logging.getLogger(__name__)
 
 VALID_INST_ID_PATTERN = re.compile(r"^[A-Z]+-USDT(-SWAP)?$")
@@ -20,14 +22,22 @@ class CommandHandler:
         monitor: PriceMonitor,
         okx_client: "OKXClient",
         wechat_client: "WeChatClient",
+        agent: "Agent | None" = None,
     ):
         self.storage = storage
         self.monitor = monitor
         self.okx_client = okx_client
         self.wechat_client = wechat_client
+        self.agent = agent
 
     async def handle_text(self, text: str, client: "WeChatClient") -> None:
         text = text.strip()
+
+        # Determine prefix: /ask → LLM agent, /pm → legacy commands
+        if text.startswith("/ask") or text.startswith("/ai"):
+            await self._handle_ask(text, client)
+            return
+
         if not text.startswith("/pm"):
             return
 
@@ -42,6 +52,8 @@ class CommandHandler:
         handlers = {
             "help": self._cmd_help,
             "h": self._cmd_help,
+            "ask": self._cmd_ask,
+            "a": self._cmd_ask,
             "add": self._cmd_add,
             "del": self._cmd_del,
             "list": self._cmd_list,
@@ -57,6 +69,60 @@ class CommandHandler:
             await client.notify(result)
         else:
             await client.notify(f"❌ 未知命令: {cmd}\n发送 /pm help 查看帮助")
+
+    async def _handle_ask(self, text: str, client: "WeChatClient") -> None:
+        """Route /ask (and /ai) messages to the LLM agent."""
+        # Extract everything after the prefix
+        for prefix in ("/ask", "/ai"):
+            if text.startswith(prefix):
+                query = text[len(prefix):].strip()
+                break
+        else:
+            query = text
+
+        if not query:
+            await client.notify(
+                "🤖 请输入您的问题（使用自然语言）\n"
+                "示例:\n"
+                "  /ask BTC现在多少钱？\n"
+                "  /ask 帮我监控ETH，跌破3000就通知我\n"
+                "  /ask 最近30分钟SOL波动大吗？\n"
+                "  /ask 我有哪些监控规则？"
+            )
+            return
+
+        if self.agent is None:
+            await client.notify(
+                "❌ AI 功能未启用。\n"
+                "请在 .env 中设置 LLM_API_KEY 后重启服务。\n"
+                "或使用 /pm 命令手动操作（发送 /pm help 查看帮助）。"
+            )
+            return
+
+        await client.notify("🤔 正在处理...")
+        result = await self.agent.answer(query)
+        await client.notify(result)
+
+    async def _cmd_ask(self, args: list) -> str:
+        """Handle /pm ask — alternative entry point for the LLM agent."""
+        if not args:
+            return (
+                "🤖 请输入您的问题（使用自然语言）\n"
+                "示例:\n"
+                "  /pm ask BTC现在多少钱？\n"
+                "  /pm ask 帮我监控ETH，跌破3000就通知我\n"
+                "  /pm ask 最近30分钟SOL波动大吗？"
+            )
+
+        if self.agent is None:
+            return (
+                "❌ AI 功能未启用。\n"
+                "请在 .env 中设置 LLM_API_KEY 后重启服务。\n"
+                "或使用 /pm 命令手动操作（发送 /pm help 查看帮助）。"
+            )
+
+        query = " ".join(args)
+        return await self.agent.answer(query)
 
     async def _cmd_help(self, args: list) -> str:
         return """🤖 OKX价格监控命令
