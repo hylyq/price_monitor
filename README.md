@@ -266,6 +266,25 @@ LLM_API_KEY=sk-xxx uv run pytest tests/test_agent_eval.py -v --real-llm
 - Agent 内置"规划语言检测"：当模型返回"好的我来查..."而不调工具时，自动追加提示推动 tool_use（针对 DeepSeek 的已知行为）
 - LLM 可能在执行主要操作前先调用辅助工具（如添加告警前先查价），eval 框架对此做了匹配而非严格的第一调用检查
 
+### Observability（可观测性）
+
+每次 `/ask` 交互自动记录三层结构化日志，无需额外配置：
+
+```
+INFO  LLM #1: latency=850ms tokens_in=1200 tokens_out=45
+INFO  工具 #1: add_price_alert(inst_id=BTC-USDT, alert_type=price_above, threshold=100000) → 12ms
+INFO  LLM #2: latency=620ms tokens_in=2100 tokens_out=80
+INFO  交互完成: total=1820ms llm_calls=2 tool_calls=1 tokens_in=3300 tokens_out=125
+```
+
+| 层级 | 指标 | 用途 |
+|------|------|------|
+| LLM API 调用 | `latency_ms`, `tokens_in`, `tokens_out` | 定位延迟瓶颈（网络 vs 推理）、成本估算 |
+| 工具执行 | `tool_name`, `params`, `elapsed_ms` | 排查工具层性能问题 |
+| 交互汇总 | `total_ms`, `llm_calls`, `tool_calls`, `tokens_total` | 一次交互的全局画像 |
+
+面试中可以直接引用这些数字：**每次 `/ask` 约消耗 3000-4000 tokens，总延迟 ~2 秒（其中网络往返占大头，工具执行 <20ms），单次成本约人民币几分钱。**
+
 ### 设计决策记录
 
 | 决策 | 选择 | 原因 |
