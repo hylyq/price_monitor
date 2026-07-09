@@ -531,7 +531,7 @@ class TestRealLLMEval:
     """
 
     @pytest.fixture
-    async def agent(self):
+    def agent(self):
         from price_monitor.agent import Agent
         from price_monitor.storage import RuleStorage
         from price_monitor.monitor import PriceMonitor

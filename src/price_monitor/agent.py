@@ -114,9 +114,9 @@ class Agent:
         self.storage = storage
         self.monitor = monitor
         self.okx_client = okx_client
-        self.api_key = api_key or os.getenv("LLM_API_KEY", "")
-        self.base_url = base_url or os.getenv("LLM_BASE_URL", DEFAULT_BASE_URL)
-        self.model = model or os.getenv("LLM_MODEL", DEFAULT_MODEL)
+        self.api_key = api_key if api_key is not None else os.getenv("LLM_API_KEY", "")
+        self.base_url = base_url if base_url is not None else os.getenv("LLM_BASE_URL", DEFAULT_BASE_URL)
+        self.model = model if model is not None else os.getenv("LLM_MODEL", DEFAULT_MODEL)
 
         if not self.api_key:
             logger.warning("LLM_API_KEY 未设置——Agent 将无法调用 LLM")
