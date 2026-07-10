@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://api.deepseek.com/anthropic"
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-v4-flash"
 MAX_TOOL_ITERATIONS = 10
 
 # ──────────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ class Agent:
     base_url:
         Anthropic-compatible API base URL.  Defaults to DeepSeek endpoint.
     model:
-                Model name.  Defaults to ``deepseek-chat``.
+        Model name.  Defaults to ``deepseek-v4-flash``.
     """
 
     def __init__(

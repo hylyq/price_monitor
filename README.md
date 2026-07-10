@@ -8,6 +8,7 @@
 - **价格告警**：价格突破/跌破指定价位时发送通知
 - **波动告警**：指定时间周期内涨跌幅达到阈值时发送通知
 - **微信交互**：通过微信命令添加/删除/查询监控规则
+- **AI 智能助手**：通过 `/ask` 命令使用自然语言交互（基于 LLM Agent + Tool-Use 架构）
 - **规则持久化**：监控规则存储在 Redis，程序重启后自动恢复
 - **智能价格显示**：根据价格大小自动调整显示精度，支持从 BTC 到 SHIB/PEPE 等各种精度
 
@@ -204,7 +205,7 @@ uv run python main.py
 /ask 帮我删除规则abc12345
 
 # 复杂场景（多步 Agent）
-/ask 帮我盯着ETH，波动超过3%就告诉我
+/ask 帮我盯着ETH，30分钟内波动超过3%就告诉我
 /ask 如果SOL跌破100或者涨超200就通知我
 ```
 
@@ -214,7 +215,7 @@ uv run python main.py
 |------|------|--------|
 | `LLM_API_KEY` | LLM API 密钥（必需，在 DeepSeek 平台获取） | - |
 | `LLM_BASE_URL` | Anthropic 兼容 API 端点 | `https://api.deepseek.com/anthropic` |
-| `LLM_MODEL` | 模型名称 | `deepseek-chat` |
+| `LLM_MODEL` | 模型名称 | `deepseek-v4-flash` |
 
 不设置 `LLM_API_KEY` 时，`/ask` 命令返回友好提示，`/pm` 命令不受影响（降级方案）。
 
@@ -232,7 +233,7 @@ uv run python main.py
 | 6 | 删除告警 | "删除abc12345这个规则" | remove_alert_rule | rule_id=abc12345 |
 | 7 | 查询规则 | "我有哪些监控规则" | list_alert_rules | (无) |
 | 8 | 行情分析 | "ETH最近30分钟波动大吗" | calculate_volatility | ETH-USDT, 30 |
-| 9 | 多步Agent | "帮我盯着ETH，波动超过3%就告诉我" | add_change_alert ×2 | change_up + change_down |
+| 9 | 多步Agent | "帮我盯着ETH，30分钟内波动超过3%..." | add_change_alert ×2 | change_up + change_down |
 | 10 | 币种映射 | "比特币什么价格" | get_current_price | inst_id=BTC-USDT |
 
 **运行测试：**
@@ -283,14 +284,14 @@ INFO  交互完成: total=1820ms llm_calls=2 tool_calls=1 tokens_in=3300 tokens_
 | 工具执行 | `tool_name`, `params`, `elapsed_ms` | 排查工具层性能问题 |
 | 交互汇总 | `total_ms`, `llm_calls`, `tool_calls`, `tokens_total` | 一次交互的全局画像 |
 
-面试中可以直接引用这些数字：**每次 `/ask` 约消耗 3000-4000 tokens，总延迟 ~2 秒（其中网络往返占大头，工具执行 <20ms），单次成本约人民币几分钱。**
+实测指标：**每次 `/ask` 约消耗 3000-4000 tokens，总延迟 ~2 秒（网络往返占大头，工具执行 <20ms），单次成本约人民币几分钱。**
 
 ### 设计决策记录
 
 | 决策 | 选择 | 原因 |
 |------|------|------|
 | LLM SDK | `anthropic` | DeepSeek 提供 Anthropic 兼容端点 (`api.deepseek.com/anthropic`)；tool_use 机制比 OpenAI function calling 更直观 |
-| 默认模型 | `deepseek-chat` | tool_use 能力强；`v4-flash` 在 Anthropic 端点上工具调用不稳定 |
+| 默认模型 | `deepseek-v4-flash` | DeepSeek 最新主力模型（`deepseek-chat` 将于 2026/07/24 废弃）；配合规划语言检测机制后 tool_use 表现稳定 |
 | 保留 `/pm` 命令 | 是 | 作为 LLM 不可用时的降级方案；精确命令在某些场景下更高效 |
 | calculate_volatility 独立工具 | 是 | LLM 不擅长精确数值计算；统计计算在 Python 层完成，LLM 专注自然语言解读 |
 | 无状态 Agent | 是 | 匹配微信消息驱动模型；每次 `/ask` 独立处理，避免会话状态管理复杂度 |
@@ -352,6 +353,11 @@ REDIS_PORT=6379
 
 # OKX WebSocket 地址（可选，默认为官方地址）
 OKX_WS_URL=wss://ws.okx.com:8443/ws/v5/public
+
+# LLM Agent（可选，不设置则 /ask 命令不可用）
+LLM_API_KEY=sk-xxx
+# LLM_BASE_URL=https://api.deepseek.com/anthropic   # 默认值
+# LLM_MODEL=deepseek-v4-flash                        # 默认值
 ```
 
 ## 品种格式
@@ -378,3 +384,4 @@ OKX_WS_URL=wss://ws.okx.com:8443/ws/v5/public
 - websockets - WebSocket 客户端
 - redis - Redis 客户端
 - python-dotenv - 环境变量管理
+- anthropic - LLM API SDK（可选，仅 `/ask` 功能需要）
