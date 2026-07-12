@@ -387,8 +387,10 @@ With these optimizations, CPU usage stays **<1%** even when monitoring multiple 
 To prevent serving stale prices during WebSocket disconnections, CryptoGuard implements multiple layers of protection:
 
 - **Cache Invalidation on Disconnect**: When the OKX WebSocket connection drops, the in-memory price cache is immediately cleared. Subsequent queries trigger a re-subscription rather than silently returning the last known (frozen) price.
+- **Subscription Preservation**: When a new instrument is added via auto-subscribe (e.g., the LLM queries SOL while BTC/ETH are already monitored), the subscribe message re-sends **all** tracked instruments — not just the new one. This prevents OKX's WebSocket server from treating the new subscribe as a replacement and silently dropping previously-subscribed instruments (whose prices would then freeze at the last snapshot).
 - **Staleness Detection**: Every price query checks the ticker's timestamp against the current time. If data is older than 30 seconds, a `⚠️ Data is X seconds stale` warning is appended to the response — the user knows the data may not be real-time.
 - **Resilient Message Parsing**: Malformed ticker messages from OKX are caught and logged individually instead of crashing the entire WebSocket read loop. The connection stays alive and healthy messages continue to be processed.
+- **Dead Connection Detection**: Ping failures are no longer silently swallowed. When a ping fails, the WebSocket is force-closed to trigger a reconnect cycle, preventing the system from serving stale prices through an undetected dead connection.
 
 These measures ensure that `/pm price` and `/ask` always surface the freshest available data — or transparently warn when data may be outdated.
 

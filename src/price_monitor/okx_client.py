@@ -104,7 +104,14 @@ class OKXClient:
                 try:
                     await self._ws.send("ping")
                 except Exception:
-                    pass
+                    logger.warning("Ping 发送失败，连接可能已断开，触发重连...")
+                    # Force-close so the _connect_and_run receive loop exits
+                    # and the outer connect() loop schedules a reconnect.
+                    try:
+                        await self._ws.close()
+                    except Exception:
+                        pass
+                    break
 
     async def _handle_message(self, message: str) -> None:
         if message == "pong":
@@ -145,16 +152,29 @@ class OKXClient:
             self._subscribed.add(inst_id)
 
         if self._ws:
-            args = [{"channel": "tickers", "instId": inst_id} for inst_id in inst_ids]
-            msg = {"op": "subscribe", "args": args}
-            await self._ws.send(json.dumps(msg))
-            logger.info(f"订阅品种: {inst_ids}")
+            # ── Send ALL subscribed instruments, not just the new ones.
+            #    Some WS servers treat a per-channel subscribe as a replacement
+            #    rather than an append.  Always sending the full set ensures
+            #    instruments subscribed earlier (e.g. at startup from saved
+            #    rules) aren't silently dropped when a new instrument is added
+            #    on the same channel later (e.g. via auto-subscribe in tools).
+            await self._send_subscribe_message(list(self._subscribed))
+            logger.info(
+                "订阅品种: %s（当前全部订阅: %s）",
+                inst_ids, list(self._subscribed),
+            )
+
+    async def _send_subscribe_message(self, inst_ids: list[str]) -> None:
+        """Send a single subscribe message for the given instruments."""
+        if not self._ws:
+            return
+        args = [{"channel": "tickers", "instId": inst_id} for inst_id in inst_ids]
+        msg = {"op": "subscribe", "args": args}
+        await self._ws.send(json.dumps(msg))
 
     async def _resubscribe(self) -> None:
         if self._subscribed and self._ws:
-            args = [{"channel": "tickers", "instId": inst_id} for inst_id in self._subscribed]
-            msg = {"op": "subscribe", "args": args}
-            await self._ws.send(json.dumps(msg))
+            await self._send_subscribe_message(list(self._subscribed))
             logger.info(f"重新订阅品种: {list(self._subscribed)}")
 
     async def unsubscribe(self, inst_ids: list[str]) -> None:
