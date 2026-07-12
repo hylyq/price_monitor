@@ -540,16 +540,26 @@ class TestRealLLMEval:
     """
 
     @pytest.fixture
-    def agent(self):
+    async def agent(self):
         from price_monitor.agent import Agent
         from price_monitor.storage import RuleStorage
         from price_monitor.monitor import PriceMonitor
         from price_monitor.okx_client import OKXClient
 
-        storage = RuleStorage(redis_url="redis://localhost:6379")
+        # Use a separate Redis DB so eval tests never pollute production data
+        storage = RuleStorage(redis_url="redis://localhost:6379", redis_db=1)
+        # ── Clean-slate: remove any leftover rules from a previous interrupted run ──
+        await storage.clear_all_rules()
+
         okx = OKXClient()
         monitor = PriceMonitor(storage=storage)
-        return Agent(storage=storage, monitor=monitor, okx_client=okx)
+        agent = Agent(storage=storage, monitor=monitor, okx_client=okx)
+
+        yield agent
+
+        # ── Teardown: leave Redis clean so production data is untouched ──
+        await storage.clear_all_rules()
+        await storage.close()
 
     async def _run_case(self, agent, case: dict, request):
         """Run one eval case and return (passed, tool_calls, response_text)."""
