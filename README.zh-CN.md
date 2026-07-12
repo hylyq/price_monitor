@@ -248,6 +248,8 @@ uv run pytest tests/test_agent_eval.py -v
 LLM_API_KEY=sk-xxx uv run pytest tests/test_agent_eval.py -v --real-llm
 ```
 
+> **注意：** 真实 LLM 评测使用独立的 Redis 数据库（DB 1），且每个用例前后自动清理，不会将测试告警规则写入生产数据（DB 0）。
+
 **Eval 结果（`deepseek-v4-flash` / `LLM_BASE_URL=https://api.deepseek.com/anthropic`）：**
 
 | # | 分类 | 输入 | 期望工具 | 结果 | 备注 |
@@ -271,6 +273,7 @@ LLM_API_KEY=sk-xxx uv run pytest tests/test_agent_eval.py -v --real-llm
 - 每次 Agent 回复末尾追加工具调用摘要（`已调用工具: get_current_price ×2, list_alert_rules ×1`），用户可以一目了然地看到 LLM 调用了哪些工具，及时发现异常操作
 - LLM 可能在执行主要操作前先调用辅助工具（如添加告警前先查价），eval 框架对此做了匹配而非严格的第一调用检查
 - 价格数据流经 WebSocket → 内存缓存 → 查询；WebSocket 断连时缓存被清空，30 秒过期阈值会警告用户数据可能过时——这是一种权衡：宁可短暂"无数据"，也不静默返回冻结价格
+- 真实 LLM 评测（`--real-llm`）使用独立 Redis DB 1，每次测试前后自动清理，避免测试告警规则污染生产数据
 
 ### Observability（可观测性）
 

@@ -248,6 +248,8 @@ uv run pytest tests/test_agent_eval.py -v
 LLM_API_KEY=sk-xxx uv run pytest tests/test_agent_eval.py -v --real-llm
 ```
 
+> **Note:** Real LLM eval tests use a separate Redis database (DB 1) and auto-cleanup before/after each case, so they never pollute production data (DB 0) with test alert rules.
+
 **Eval results (`deepseek-v4-flash` / `LLM_BASE_URL=https://api.deepseek.com/anthropic`):**
 
 | # | Category | Input | Expected Tool | Result | Notes |
@@ -271,6 +273,7 @@ LLM_API_KEY=sk-xxx uv run pytest tests/test_agent_eval.py -v --real-llm
 - Every Agent response appends a tool-call summary footer (`已调用工具: get_current_price ×2, list_alert_rules ×1`) so users can see exactly which tools were invoked and detect unexpected actions
 - The LLM may call auxiliary tools before the main action (e.g., checking price before adding an alert); the eval framework matches on eventual behavior rather than strictly checking the first tool call
 - Price data flows through WebSocket → in-memory cache → query; when the WebSocket disconnects, the cache is purged and a 30-second staleness threshold warns users of outdated data — this trades a brief "no data" window for never silently serving frozen prices
+- Real LLM eval tests (`--real-llm`) use Redis DB 1 with automatic setup/teardown cleanup to avoid polluting production data with test alert rules
 
 ### Observability
 
