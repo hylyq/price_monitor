@@ -170,4 +170,4 @@ class RuleStorage:
         return result
 
     async def close(self) -> None:
-        await self.redis.close()
+        await self.redis.aclose()
