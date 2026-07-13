@@ -13,6 +13,7 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import statistics
 from datetime import datetime, timedelta, timezone
@@ -234,13 +235,39 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 STALE_THRESHOLD = timedelta(seconds=30)
 
 
-def _staleness_suffix(ticker: Any) -> str:
-    """Return a warning string if the ticker data is older than the threshold."""
+async def _get_fresh_ticker(
+    okx_client: OKXClient,
+    inst_id: str,
+    *,
+    wait_on_subscribe: bool = True,
+) -> tuple[Any, str | None]:
+    """Return ``(ticker, error)`` — exactly one is non-None.
+
+    If *wait_on_subscribe* is True and the instrument hasn't been subscribed
+    yet, auto-subscribe and wait up to 3 s for the first ticker to arrive.
+    """
     from price_monitor.okx_client import TickerData as TD
+
+    ticker = okx_client.get_ticker(inst_id)
+
+    if ticker is None:
+        await okx_client.subscribe([inst_id])
+        if wait_on_subscribe:
+            ticker = await okx_client.wait_for_ticker(inst_id, timeout=3.0)
+        if ticker is None:
+            return None, (
+                f"{inst_id} 已自动订阅，但尚未收到价格数据。"
+                f"请稍后再次查询。"
+            )
+
     age = datetime.now(timezone.utc) - ticker.ts.replace(tzinfo=timezone.utc)
     if age > STALE_THRESHOLD:
-        return f"\n⚠️ 数据已过期 {int(age.total_seconds())} 秒，可能不是实时价格"
-    return ""
+        return None, (
+            f"❌ {inst_id} 的价格数据已过期 {int(age.total_seconds())} 秒。"
+            f"WebSocket 可能未正常推送数据，请稍后重试。"
+        )
+
+    return ticker, None
 
 
 async def execute_get_current_price(
@@ -248,18 +275,11 @@ async def execute_get_current_price(
     **kwargs: Any,
 ) -> str:
     inst_id: str = kwargs["inst_id"]
-    ticker = okx_client.get_ticker(inst_id)
-    if ticker is None:
-        await okx_client.subscribe([inst_id])
-        return (
-            f"{inst_id} 暂时没有价格数据，已自动订阅该品种。"
-            f"请稍后再次查询。"
-        )
+    ticker, error = await _get_fresh_ticker(okx_client, inst_id)
+    if error is not None:
+        return error
     from price_monitor.storage import format_price
-    return (
-        f"{inst_id} 当前价格: ${format_price(ticker.last)}"
-        f"{_staleness_suffix(ticker)}"
-    )
+    return f"{inst_id} 当前价格: ${format_price(ticker.last)}"
 
 
 async def execute_get_ticker_detail(
@@ -267,13 +287,9 @@ async def execute_get_ticker_detail(
     **kwargs: Any,
 ) -> str:
     inst_id: str = kwargs["inst_id"]
-    ticker = okx_client.get_ticker(inst_id)
-    if ticker is None:
-        await okx_client.subscribe([inst_id])
-        return (
-            f"{inst_id} 暂时没有行情数据，已自动订阅该品种。"
-            f"请稍后再次查询。"
-        )
+    ticker, error = await _get_fresh_ticker(okx_client, inst_id)
+    if error is not None:
+        return error
     from price_monitor.storage import format_price
     return (
         f"{inst_id} 详细行情:\n"
@@ -281,7 +297,6 @@ async def execute_get_ticker_detail(
         f"  24h 最高: ${format_price(ticker.high_24h)}\n"
         f"  24h 最低: ${format_price(ticker.low_24h)}\n"
         f"  24h 成交量: {ticker.vol_24h:,.0f}"
-        f"{_staleness_suffix(ticker)}"
     )
 
 
